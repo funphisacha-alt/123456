@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ประดิษฐ์ขวดพลาสติก</title>
+<style>
+:root{--bg:#38b6ff;--ink:#12324a;--card:#fff;--g:#3ddc6b;--y:#ffd93d;--b:#1e90ff;--r:#ff5d5d;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f4c7a;--ink:#eaf6ff;--card:#17334b}}
+*{box-sizing:border-box}html,body{margin:0;min-height:100%}
+body{background:var(--bg);color:var(--ink);font-family:"Prompt","Sarabun","Trebuchet MS",Tahoma,sans-serif;text-align:center;
+background-image:linear-gradient(rgba(255,255,255,.12) 2px,transparent 2px),linear-gradient(90deg,rgba(255,255,255,.12) 2px,transparent 2px);background-size:48px 48px}
+h1{font-size:clamp(28px,7vw,52px);margin:.3em 0;text-shadow:3px 3px 0 var(--y)}
+.screen{display:none;max-width:900px;margin:0 auto;padding:12px}.screen.on{display:block}
+.card{background:var(--card);border:4px solid var(--ink);border-radius:16px;padding:14px;box-shadow:0 6px 0 var(--ink);margin:10px auto}
+button{font:inherit;font-weight:800;font-size:18px;color:#fff;background:var(--g);border:3px solid var(--ink);border-radius:12px;padding:10px 20px;margin:6px;box-shadow:0 5px 0 var(--ink);cursor:pointer;color:#06280f}
+button:active{transform:translateY(4px);box-shadow:0 1px 0 var(--ink)}
+button.b{background:var(--b);color:#fff}button.y{background:var(--y)}button.r{background:var(--r);color:#fff}
+input{font:inherit;font-size:20px;padding:10px;border:3px solid var(--ink);border-radius:10px;width:80%;max-width:320px;text-align:center}
+#hud{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px}
+.pill{background:var(--y);color:#12324a;border:3px solid var(--ink);border-radius:20px;padding:4px 14px;font-weight:800}
+#cv{width:100%;max-width:900px;aspect-ratio:16/9;border:4px solid var(--ink);border-radius:14px;touch-action:none;background:#8fd8ff;display:block;margin:6px auto}
+table{width:100%;border-collapse:collapse}th,td{border-bottom:2px solid var(--ink);padding:6px;font-size:15px}
+#toast{position:fixed;left:50%;top:calc(12px + env(safe-area-inset-top,0px));transform:translateX(-50%);background:var(--r);color:#fff;border:3px solid var(--ink);border-radius:12px;padding:8px 16px;font-weight:700;display:none;z-index:9;max-width:92%}
+#vid{position:fixed;right:6px;bottom:6px;width:120px;opacity:.7;transform:scaleX(-1);display:none;border-radius:8px}
+</style>
+</head>
+<body>
+<div id="toast"></div><video id="vid" playsinline muted></video>
+
+<!-- หน้าหลัก -->
+<section id="home" class="screen on">
+ <h1>🧴 ประดิษฐ์ขวดพลาสติก</h1>
+ <div class="card"><p>เปลี่ยนขวดพลาสติกให้เป็นนวัตกรรม! ลากชิ้นส่วนที่เหมาะกับโจทย์ไปใส่ขวดให้ทัน</p>
+ <input id="nm" maxlength="16" placeholder="ใส่ชื่อของคุณ">
+ <div><button onclick="startGame()">▶ เริ่มเกม</button><button class="b" onclick="showDash()">📊 ดูสถิติ</button>
+ <button class="y" onclick="openSnd()">🔊 ตั้งค่าเสียง</button><button class="b" onclick="enableHand()">🖐️ โหมดกล้องมือ (ทดลอง)</button></div>
+ <div id="snd" style="display:none">เสียงดนตรี: <input type="range" id="vol" min="0" max="100" value="40" style="width:50%"></div></div>
+</section>
+
+<!-- หน้าเกม -->
+<section id="game" class="screen">
+ <div id="hud"><span class="pill" id="hr">รอบ 1/5</span><span class="pill" id="hs">คะแนน 0</span><span class="pill" id="ht">⏱ 40</span><button class="r" onclick="exitGame()">ออกจากเกม</button></div>
+ <canvas id="cv" width="800" height="450"></canvas>
+</section>
+
+<!-- Dashboard -->
+<section id="dash" class="screen">
+ <h1>📊 Dashboard</h1><div class="card" id="dbody"></div>
+ <button onclick="show('home')">⬅ กลับ</button><button class="r" onclick="resetData()">ล้างข้อมูล</button>
+</section>
+
+<script>
+/* ===== ข้อมูลเกม (แก้ไขได้ที่นี่) ===== */
+// ชิ้นส่วนทั้งหมด: id -> [ชื่อ, อีโมจิ]
+const PARTS={soil:['ดิน','🟫'],seed:['เมล็ดผัก','🌱'],coin:['ช่องหยอดเหรียญ','🪙'],cap:['ฝาปิดแน่น','⭕'],hole:['รูเจาะ','🕳️'],
+string:['เชือกแขวน','🧵'],feed:['เมล็ดอาหารนก','🌾'],solar:['แผงโซลาร์','☀️'],led:['หลอด LED','💡'],wheel:['ล้อ','🛞'],glue:['กาวร้อน','🧴'],fire:['ไฟแช็ก','🔥']};
+// โจทย์แต่ละรอบ: problem=ปัญหา, need=ชิ้นส่วนที่ต้องใช้, name=ชื่อสิ่งประดิษฐ์, fact=ความรู้นวัตกรรม
+const ROUNDS=[
+ {problem:'โรงเรียนมีพื้นที่น้อย อยากปลูกผักกินเอง',need:['soil','seed'],name:'กระถางผักขวดแขวน',fact:'Upcycle = เปลี่ยนของเหลือใช้ให้มีมูลค่าสูงขึ้น'},
+ {problem:'น้องๆ อยากหัดออมเงินแต่ไม่มีกระปุก',need:['coin','cap'],name:'กระปุกออมสินขวด',fact:'นวัตกรรมเริ่มจากการมองเห็นปัญหาใกล้ตัว (Empathize)'},
+ {problem:'นกในสวนโรงเรียนไม่มีอาหาร',need:['string','feed'],name:'ที่ให้อาหารนก',fact:'Reuse = ใช้ซ้ำ ลดขยะพลาสติกก่อนต้องรีไซเคิล'},
+ {problem:'ไฟดับบ่อย ต้องการโคมไฟประหยัดพลังงาน',need:['solar','led'],name:'โคมไฟโซลาร์ขวด',fact:'นวัตกรรมสีเขียวใช้พลังงานสะอาดแทนไฟฟ้า'},
+ {problem:'อยากได้ของเล่นเคลื่อนที่จากวัสดุเหลือใช้',need:['wheel','cap'],name:'รถของเล่นขวด',fact:'Prototype = ต้นแบบ ทดลองแล้วปรับปรุงได้เรื่อยๆ'}];
+const ROUND_TIME=40, W=800, H=450, BX=230, BY=270; // เวลาต่อรอบ(วินาที), ขนาด canvas, ตำแหน่งขวด
+
+/* ===== ตัวช่วย: ข้อมูลผู้เล่น (Local Storage) ===== */
+const KEY='bottleLabV1';
+function load(){try{return JSON.parse(localStorage.getItem(KEY))||{}}catch(e){return {}}}
+function save(d){try{localStorage.setItem(KEY,JSON.stringify(d))}catch(e){toast('บันทึกข้อมูลไม่ได้ (เบราว์เซอร์บล็อกที่เก็บข้อมูล)')}}
+const $=id=>document.getElementById(id);
+function toast(t){const e=$('toast');e.textContent=t;e.style.display='block';clearTimeout(toast.k);toast.k=setTimeout(()=>e.style.display='none',3500)}
+function show(id){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('on'));$(id).classList.add('on')}
+$('nm').value=(()=>{try{return localStorage.getItem(KEY+'last')||''}catch(e){return ''}})();
+
+/* ===== เสียงดนตรีประกอบ (WebAudio ไม่ใช้ไฟล์ภายนอก) ===== */
+let ac,gain,noteI=0,musicT;const MEL=[523,659,784,659,587,698,880,698,523,659,784,1047,988,784,659,587];
+function startMusic(){try{if(!ac){ac=new (window.AudioContext||window.webkitAudioContext)();gain=ac.createGain();gain.connect(ac.destination)}
+ ac.resume();setVol();clearInterval(musicT);musicT=setInterval(()=>{const o=ac.createOscillator(),g=ac.createGain();o.type='square';o.frequency.value=MEL[noteI++%MEL.length]/2;
+ g.gain.setValueAtTime(.25,ac.currentTime);g.gain.exponentialRampToValueAtTime(.001,ac.currentTime+.22);o.connect(g);g.connect(gain);o.start();o.stop(ac.currentTime+.25)},260)}catch(e){toast('เปิดเสียงไม่ได้ในเบราว์เซอร์นี้')}}
+function setVol(){if(gain)gain.gain.value=$('vol').value/100*.35}
+function sfx(f){try{if(!ac)return;const o=ac.createOscillator();o.frequency.value=f;o.connect(gain);o.start();o.stop(ac.currentTime+.12)}catch(e){}}
+$('vol').oninput=setVol;function openSnd(){const s=$('snd');s.style.display=s.style.display=='none'?'block':'none';startMusic()}
+
+/* ===== สถานะเกม ===== */
+const cv=$('cv'),ctx=cv.getContext('2d');let g=null,last=0,raf=0,hand=null;
+function startGame(){const n=$('nm').value.trim();if(!n){toast('กรุณาใส่ชื่อก่อนเริ่มเกม');return}
+ try{localStorage.setItem(KEY+'last',n)}catch(e){}
+ g={name:n,round:0,score:0,total:0,drag:null,msg:'',msgT:0,state:'play'};startMusic();show('game');newRound();last=performance.now();cancelAnimationFrame(raf);raf=requestAnimationFrame(loop)}
+function newRound(){const r=ROUNDS[g.round];g.time=ROUND_TIME;g.got=[];g.state='play';
+ const others=Object.keys(PARTS).filter(k=>!r.need.includes(k)).sort(()=>Math.random()-.5).slice(0,4);
+ g.parts=r.need.concat(others).sort(()=>Math.random()-.5).map((id,i)=>({id,x:0,y:0,hx:590+(i%2)*100,hy:110+Math.floor(i/3)*0+Math.floor(i/2)*95,ph:0}));
+ g.parts.forEach(p=>{p.x=p.hx;p.y=p.hy});$('hr').textContent=`รอบ ${g.round+1}/${ROUNDS.length}`}
+function exitGame(){cancelAnimationFrame(raf);g=null;show('home')}
+function finish(){cancelAnimationFrame(raf);const d=load(),p=d[g.name]||{best:0,games:0,totalTime:0,last:0};
+ p.best=Math.max(p.best,g.score);p.games++;p.totalTime+=Math.round(g.total);p.last=g.score;d[g.name]=p;save(d);
+ toast(`จบเกม! ${g.name} ได้ ${g.score} คะแนน 🎉`);g=null;showDash()}
+
+/* ===== ลูปหลัก ===== */
+function loop(t){if(!g)return;const dt=Math.min(.1,(t-last)/1000);last=t;
+ if(g.state=='play'){g.time-=dt;g.total+=dt;if(g.time<=0){g.msg='หมดเวลา! ไปรอบถัดไป';g.msgT=1.5;g.state='done'}}
+ else{g.msgT-=dt;if(g.msgT<=0){g.round++;if(g.round>=ROUNDS.length)return finish();newRound()}}
+ g.parts.forEach(p=>{if(g.drag!==p&&!p.placed){p.x+=(p.hx-p.x)*.25;p.y+=(p.hy-p.y)*.25}});
+ $('ht').textContent='⏱ '+Math.ceil(Math.max(0,g.time));$('hs').textContent='คะแนน '+g.score;draw();raf=requestAnimationFrame(loop)}
+
+/* ===== วาดภาพ ===== */
+function draw(){const r=ROUNDS[g.round];ctx.clearRect(0,0,W,H);
+ ctx.fillStyle='#8fd8ff';ctx.fillRect(0,0,W,H);ctx.fillStyle='#3ddc6b';ctx.fillRect(0,360,W,90);
+ ctx.strokeStyle='rgba(0,0,0,.15)';for(let x=0;x<W;x+=60){ctx.strokeRect(x,360,60,45)}
+ ctx.fillStyle='#fff';ctx.strokeStyle='#12324a';ctx.lineWidth=4;rr(20,14,760,70,14);ctx.fill();ctx.stroke();
+ ctx.fillStyle='#12324a';ctx.font='bold 22px sans-serif';ctx.textAlign='center';ctx.fillText('โจทย์: '+r.problem,400,44);
+ ctx.font='16px sans-serif';ctx.fillText('ลากชิ้นส่วนที่เหมาะสม 2 ชิ้นไปใส่ขวด',400,70);
+ // ขวด
+ ctx.fillStyle='rgba(120,200,255,.75)';ctx.lineWidth=4;rr(BX-55,BY-100,110,200,26);ctx.fill();ctx.stroke();
+ ctx.fillRect(BX-22,BY-135,44,38);ctx.strokeRect(BX-22,BY-135,44,38);ctx.fillStyle='#ffd93d';ctx.fillRect(BX-26,BY-148,52,16);ctx.strokeRect(BX-26,BY-148,52,16);
+ ctx.font='40px sans-serif';g.got.forEach((id,i)=>ctx.fillText(PARTS[id][1],BX-18+i*34-17+17,BY+10+i*0));
+ if(g.state=='done'&&g.got.length==2){ctx.font='bold 26px sans-serif';ctx.fillStyle='#12324a';ctx.fillText('✨ '+r.name+' ✨',BX,BY+130)}
+ // ถาดชิ้นส่วน
+ ctx.fillStyle='rgba(255,255,255,.7)';rr(535,96,250,300,14);ctx.fill();ctx.stroke();
+ g.parts.forEach(p=>{if(p.placed)return;ctx.fillStyle='#ffd93d';rr(p.x-38,p.y-34,76,68,10);ctx.fill();ctx.stroke();ctx.fillStyle='#12324a';ctx.font='34px sans-serif';ctx.fillText(PARTS[p.id][1],p.x,p.y+8);ctx.font='bold 12px sans-serif';ctx.fillText(PARTS[p.id][0],p.x,p.y+28)});
+ if(g.msgT>0||g.state=='done'){ctx.fillStyle='#12324a';ctx.font='bold 18px sans-serif';ctx.fillText(g.state=='done'?'💡 '+r.fact:g.msg,400,415)}
+ if(hand){ctx.fillStyle=hand.down?'#ff5d5d':'#fff';ctx.beginPath();ctx.arc(hand.x,hand.y,14,0,7);ctx.fill();ctx.stroke()}}
+function rr(x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath()}
+
+/* ===== การควบคุม: หยิบ/ลาก/วาง (เมาส์ สัมผัส และมือ ใช้ฟังก์ชันชุดเดียวกัน) ===== */
+function grab(x,y){if(!g||g.state!='play')return;const p=g.parts.find(p=>!p.placed&&Math.abs(p.x-x)<40&&Math.abs(p.y-y)<36);if(p){g.drag=p;sfx(660)}}
+function move(x,y){if(g&&g.drag){g.drag.x=x;g.drag.y=y}}
+function drop(){if(!g||!g.drag)return;const p=g.drag,r=ROUNDS[g.round];g.drag=null;
+ if(Math.hypot(p.x-BX,p.y-BY)>110)return;
+ if(r.need.includes(p.id)){p.placed=true;g.got.push(p.id);g.score+=20;sfx(988);g.msg='ถูกต้อง! +20';g.msgT=1;
+  if(g.got.length==r.need.length){const b=Math.ceil(g.time);g.score+=b;g.msg='สำเร็จ! โบนัสเวลา +'+b;g.state='done';g.msgT=3.2}}
+ else{g.score=Math.max(0,g.score-5);sfx(180);g.msg='ชิ้นนี้ยังไม่เหมาะกับโจทย์ -5 ลองใหม่!';g.msgT=1.5}}
+function pos(e){const r=cv.getBoundingClientRect();return[(e.clientX-r.left)*W/r.width,(e.clientY-r.top)*H/r.height]}
+cv.addEventListener('pointerdown',e=>{cv.setPointerCapture(e.pointerId);grab(...pos(e))});
+cv.addEventListener('pointermove',e=>move(...pos(e)));
+cv.addEventListener('pointerup',drop);cv.addEventListener('pointercancel',drop);
+
+/* ===== โหมดกล้องมือ MediaPipe (ทดลอง ต้องออนไลน์และอนุญาตกล้อง) ===== */
+const MP='https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/';
+async function enableHand(){try{
+ if(!window.Hands)await new Promise((ok,no)=>{const s=document.createElement('script');s.src=MP+'hands.js';s.onload=ok;s.onerror=()=>no(new Error('โหลดไลบรารีไม่ได้'));document.head.appendChild(s)});
+ const v=$('vid');v.srcObject=await navigator.mediaDevices.getUserMedia({video:{width:320,height:240}});await v.play();v.style.display='block';
+ const hs=new Hands({locateFile:f=>MP+f});hs.setOptions({maxNumHands:1,modelComplexity:0,minDetectionConfidence:.6,minTrackingConfidence:.5});
+ hs.onResults(res=>{const l=res.multiHandLandmarks&&res.multiHandLandmarks[0];if(!l){hand=null;drop();return}
+  const x=(1-l[8].x)*W,y=l[8].y*H,pinch=Math.hypot(l[4].x-l[8].x,l[4].y-l[8].y)<.06;
+  if(pinch&&!(hand&&hand.down))grab(x,y);if(!pinch&&hand&&hand.down)drop();if(pinch)move(x,y);hand={x,y,down:pinch}});
+ await hs.initialize();toast('เปิดโหมดมือแล้ว: ใช้นิ้วชี้เลื่อน บีบนิ้วโป้งกับนิ้วชี้เพื่อหยิบ');
+ (function f(){if(v.readyState>=2)hs.send({image:v}).catch(()=>{});requestAnimationFrame(f)})()
+}catch(e){$('vid').style.display='none';toast('เปิดโหมดมือไม่ได้ ('+(e.message||'ไม่ทราบสาเหตุ')+') ใช้เมาส์/นิ้วแตะแทนได้ตามปกติ')}}
+
+/* ===== Dashboard ===== */
+function showDash(){const d=load(),n=Object.keys(d);let h;
+ if(!n.length)h='<p>ยังไม่มีข้อมูลผู้เล่น เริ่มเล่นเกมเพื่อบันทึกสถิติ</p>';
+ else{const best=Math.max(...n.map(k=>d[k].best));const tg=n.reduce((a,k)=>a+d[k].games,0),tt=n.reduce((a,k)=>a+d[k].totalTime,0);
+  h=`<p><span class="pill">🏆 คะแนนสูงสุด ${best}</span> <span class="pill">⏱ เวลาเฉลี่ย ${tg?Math.round(tt/tg):0} วิ/เกม</span></p><table><tr><th>ชื่อ</th><th>สูงสุด</th><th>ล่าสุด</th><th>เล่น</th><th>เวลาเฉลี่ย</th></tr>`+
+  n.sort((a,b)=>d[b].best-d[a].best).map(k=>`<tr><td>${esc(k)}</td><td>${d[k].best}</td><td>${d[k].last}</td><td>${d[k].games}</td><td>${Math.round(d[k].totalTime/d[k].games)} วิ</td></tr>`).join('')+'</table>'}
+ $('dbody').innerHTML=h;show('dash')}
+function esc(s){return s.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+function resetData(){if(confirm('ล้างข้อมูลทั้งหมด?')){try{localStorage.removeItem(KEY)}catch(e){}showDash()}}
+window.addEventListener('error',()=>toast('เกิดข้อผิดพลาดบางอย่าง ลองรีเฟรชหน้าเว็บ'));
+</script>
+</body>
+</html>
